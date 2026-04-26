@@ -4,4 +4,5 @@ node_modules
 
 /generated/prisma
 
-/uploads/.gitkeep
+backend/uploads/*
+!backend/uploads/.gitkeep
