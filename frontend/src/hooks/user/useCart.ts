@@ -1,0 +1,63 @@
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { userAPI } from "../../api/user";
+import { qk } from "../../utils/queryKeys";
+import toast from "react-hot-toast";
+import { getErrorMessage } from "../../utils/getErrorMessage";
+
+export const useCart = () =>
+  useQuery({
+    queryKey: qk.cart,
+    queryFn: () => userAPI.cart().then(r => r.data.data),
+  });
+
+export const useAddToCart = () => {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: any) => userAPI.addToCart(data),
+
+    onSuccess: () => {
+      toast.success("Added to cart 🛒");
+      qc.invalidateQueries({ queryKey: qk.cart });
+    },
+
+    onError: (err: any) => {
+      toast.error(getErrorMessage(err));
+    },
+  });
+};
+
+export const useUpdateCart = () => {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: any) =>
+      userAPI.updateCart(id, data),
+
+    onSuccess: () => {
+      toast.success("Cart updated");
+      qc.invalidateQueries({ queryKey: qk.cart });
+    },
+
+    onError: (err: any) => {
+      toast.error(getErrorMessage(err));
+    },
+  });
+};
+
+export const useRemoveCart = () => {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: number) => userAPI.removeCart(id),
+
+    onSuccess: () => {
+      toast.success("Item removed ❌");
+      qc.invalidateQueries({ queryKey: qk.cart });
+    },
+
+    onError: (err: any) => {
+      toast.error(getErrorMessage(err));
+    },
+  });
+};
