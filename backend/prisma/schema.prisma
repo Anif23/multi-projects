@@ -32,6 +32,19 @@ enum PaymentStatus {
   FAILED
 }
 
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum NotificationType {
+  LOW_STOCK
+  ORDER
+  ANNOUNCEMENT
+  PROMOTION
+  SYSTEM
+}
+
 model User {
   id       Int    @id @default(autoincrement())
   username String
@@ -45,7 +58,12 @@ model User {
   wishlist Wishlist?
   orders   Order[]
 
+  addresses Address[]
+  reviews   Review[]
+
   notifications Notification[]
+
+  refreshTokens RefreshToken[]
 
   todos Todo[]
 }
@@ -139,7 +157,19 @@ model Product {
   stock    Int @default(0)
   lowStock Int @default(5)
 
-  isActive Boolean @default(true)
+  isActive   Boolean @default(true)
+  isFeatured Boolean @default(false)
+
+  isDeleted Boolean @default(false)
+
+  sku   String?  @unique
+  brand String?
+  tags  String[]
+
+  discountValue Float?
+  discountType  DiscountType?
+  discountStart DateTime?
+  discountEnd   DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -153,6 +183,8 @@ model Product {
   orderItems    OrderItem[]
   stockLogs     StockLog[]
   wishlistItems WishlistItem[]
+
+  reviews Review[]
 }
 
 model ProductImage {
@@ -176,12 +208,16 @@ model StockLog {
 }
 
 model Notification {
-  id      Int     @id @default(autoincrement())
+  id      Int    @id @default(autoincrement())
+  title   String
   message String
-  isRead  Boolean @default(false)
+
+  type NotificationType @default(SYSTEM)
+
+  isRead Boolean @default(false)
 
   userId Int?
-user   User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 }
@@ -204,6 +240,83 @@ model WishlistItem {
 
   @@unique([wishlistId, productId])
   @@index([productId])
+}
+
+model Coupon {
+  id   Int    @id @default(autoincrement())
+  code String @unique
+
+  type  DiscountType
+  value Float
+
+  minOrder    Float?
+  maxDiscount Float?
+
+  usageLimit Int?
+  usedCount  Int  @default(0)
+
+  isActive Boolean @default(true)
+
+  startAt DateTime?
+  endAt   DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model Announcement {
+  id       Int     @id @default(autoincrement())
+  title    String
+  message  String
+  isActive Boolean @default(true)
+
+  startAt DateTime?
+  endAt   DateTime?
+
+  createdAt DateTime @default(now())
+}
+
+model Address {
+  id Int @id @default(autoincrement())
+
+  userId Int
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  fullName String
+  phone    String
+  address1 String
+  address2 String?
+  city     String
+  state    String
+  country  String
+  zipCode  String
+
+  isDefault Boolean @default(false)
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+
+  userId    Int
+  productId Int
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId])
 }
 
 //Todo

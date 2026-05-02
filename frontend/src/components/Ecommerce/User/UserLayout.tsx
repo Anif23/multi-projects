@@ -1,24 +1,15 @@
 import { Outlet } from "react-router-dom";
 import UserHeader from "./Header";
-import { useState } from "react";
 
 const UserLayout = () => {
-  const [open, setOpen] = useState(false);
-
   return (
-    <div className="bg-gray-100 min-h-screen">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <UserHeader />
 
-      {open && (
-        <div
-          className="fixed inset-0 bg-black/40 z-40"
-          onClick={() => setOpen(false)}
-        />
-      )}
-
-      <UserHeader open={open} setOpen={setOpen} />
-      
-      <main className="pt-20 p-6 max-w-7xl mx-auto">
-        <Outlet />
+      <main className="flex-1 pt-10 md:pt-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-8">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

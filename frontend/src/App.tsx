@@ -8,9 +8,9 @@ import Todos from "./pages/Todo/todos";
 
 import Dashboard from "./pages/ECommerce/Admin/Dashboard";
 import Products from "./pages/ECommerce/Admin/Products/Page";
-import ProductForm from "./pages/ECommerce/Admin/Products/AddProduct";
+import ProductForm from "./pages/ECommerce/Admin/Products/ProductForm";
 import Categories from "./pages/ECommerce/Admin/Categories/Page";
-import CategoryForm from "./pages/ECommerce/Admin/Categories/AddCategory";
+import CategoryForm from "./pages/ECommerce/Admin/Categories/CategoryForm";
 import EcommerceAdminLayout from "./components/Ecommerce/Admin/AdminLayout";
 
 import UserPage from "./pages/ECommerce/User/Page";

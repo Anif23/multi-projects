@@ -1,9 +1,12 @@
-import axios from "axios";
+import axios, { AxiosError } from "axios";
 import { useAuthStore } from "../store/authStore";
 import toast from "react-hot-toast";
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 const api = axios.create({
-  baseURL: "http://localhost:8000",
+  baseURL: API_URL,
+  withCredentials: true,
 });
 
 api.interceptors.request.use((config) => {
@@ -16,16 +19,59 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+let isRefreshing = false;
+
+let queue: ((token: string) => void)[] = [];
+
+const processQueue = (token: string) => {
+  queue.forEach((cb) => cb(token));
+  queue = [];
+};
+
 api.interceptors.response.use(
-  (res) => res,
-  (error) => {
-    const status = error?.response?.status;
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as any;
 
-    if (status === 401) {
-      toast.error("Session expired. Please login again");
+    const status = error.response?.status;
 
-      useAuthStore.getState().logout();
-      window.location.href = "/login";
+    if (status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      if (isRefreshing) {
+        return new Promise((resolve) => {
+          queue.push((token: string) => {
+            originalRequest.headers.Authorization = `Bearer ${token}`;
+            resolve(api(originalRequest));
+          });
+        });
+      }
+
+      isRefreshing = true;
+
+      try {
+        const res = await axios.post<{ token: string }>(
+          `${API_URL}/auth/refresh`,
+          {},
+          { withCredentials: true },
+        );
+
+        const newToken = res.data.token;
+
+        useAuthStore.getState().setAuth(newToken);
+
+        processQueue(newToken);
+
+        return api(originalRequest);
+      } catch (err) {
+        toast.error("Session expired");
+
+        useAuthStore.getState().logout();
+
+        window.location.href = "/login";
+      } finally {
+        isRefreshing = false;
+      }
     }
 
     return Promise.reject(error);

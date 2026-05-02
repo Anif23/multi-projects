@@ -2,91 +2,264 @@ import { prisma } from "../../config/prisma.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
 import { ApiError } from "../../utils/apiError.js";
 import { createProductSchema, updateProductSchema } from "../../validations/ecommerce.js";
-import slugify from "slugify";
 import fs from "fs";
 import path from "path";
 import { deleteFiles } from "../../utils/deleteFiles.js";
 
+import {
+    generateSlug,
+    generateSKU,
+    cleanBody,
+    parseTags,
+    toDate,
+    normalizeValue,
+    toBoolean
+} from "../../utils/productUtils.js";
+
 export const productController = {
 
     getProducts: asyncHandler(async (req, res) => {
-        const { search, categoryId, isActive } = req.query;
+        const {
+            search,
+            categoryId,
+            isActive = "true",
+            page = 1,
+            limit = 8,
+            sort = "latest",
+            minPrice,
+            maxPrice,
+        } = req.query;
 
         const userId = req.user?.id;
 
+        const currentPage = Number(page) || 1;
+        const perPage = Number(limit) || 8;
+        const skip = (currentPage - 1) * perPage;
+
+        const now = new Date();
+
+        const where = {
+            isDeleted: false,
+
+            ...(search && {
+                name: {
+                    contains: search,
+                    mode: "insensitive",
+                },
+            }),
+
+            ...(categoryId && {
+                categoryId: Number(categoryId),
+            }),
+
+            ...(typeof isActive !== "undefined" && {
+                isActive: isActive === "true",
+            }),
+
+            ...(minPrice || maxPrice
+                ? {
+                    price: {
+                        ...(minPrice && { gte: Number(minPrice) }),
+                        ...(maxPrice && { lte: Number(maxPrice) }),
+                    },
+                }
+                : {}),
+        };
+
+        let orderBy = { createdAt: "desc" };
+
+        if (sort === "oldest") {
+            orderBy = { createdAt: "asc" };
+        }
+
+        if (sort === "low-price") {
+            orderBy = { price: "asc" };
+        }
+
+        if (sort === "high-price") {
+            orderBy = { price: "desc" };
+        }
+
+        if (sort === "name") {
+            orderBy = { name: "asc" };
+        }
+
+        const total = await prisma.product.count({
+            where,
+        });
+
         const products = await prisma.product.findMany({
-            where: {
-                ...(search && {
-                    name: { contains: search, mode: "insensitive" },
-                }),
-                ...(categoryId && { categoryId: Number(categoryId) }),
-                ...(isActive && { isActive: isActive === "true" }),
-            },
+            where,
+            skip,
+            take: perPage,
+            orderBy,
+
             include: {
                 category: true,
                 images: true,
+
+                reviews: {
+                    select: {
+                        rating: true,
+                    },
+                },
+
                 wishlistItems: userId
                     ? {
                         where: {
                             wishlist: {
-                                userId: userId,
+                                userId,
                             },
                         },
-                        select: { id: true },
+                        select: {
+                            id: true,
+                        },
                     }
                     : false,
             },
-            orderBy: { createdAt: "desc" },
         });
 
-        const result = products.map((p) => ({
-            ...p,
-            isWishlisted: userId ? p.wishlistItems.length > 0 : false,
-        }));
+        const result = products.map((p) => {
+            const isDiscountActive =
+                p.discountValue &&
+                (!p.discountStart || p.discountStart <= now) &&
+                (!p.discountEnd || p.discountEnd >= now);
+
+            let finalPrice = p.price;
+
+            if (isDiscountActive) {
+                if (p.discountType === "PERCENTAGE") {
+                    finalPrice =
+                        p.price -
+                        (p.price * p.discountValue) / 100;
+                }
+
+                if (p.discountType === "FIXED") {
+                    finalPrice =
+                        p.price - p.discountValue;
+                }
+            }
+
+            if (finalPrice < 0) {
+                finalPrice = 0;
+            }
+
+            const totalRatings = p.reviews.length;
+
+            const avgRating =
+                totalRatings > 0
+                    ? Number(
+                        (
+                            p.reviews.reduce(
+                                (sum, r) => sum + r.rating,
+                                0
+                            ) / totalRatings
+                        ).toFixed(1)
+                    )
+                    : 0;
+
+            return {
+                ...p,
+
+                reviews: undefined,
+
+                wishlistItems: undefined,
+
+                isWishlisted: userId
+                    ? p.wishlistItems.length > 0
+                    : false,
+
+                isOnSale: !!isDiscountActive,
+
+                finalPrice,
+
+                discountPercent:
+                    isDiscountActive &&
+                        p.discountType === "PERCENTAGE"
+                        ? p.discountValue
+                        : null,
+
+                avgRating,
+                reviewCount: totalRatings,
+            };
+        });
+
+        const totalPages = Math.ceil(
+            total / perPage
+        );
+
         res.json({
             success: true,
+
             data: result,
+
+            pagination: {
+                total,
+                page: currentPage,
+                limit: perPage,
+                totalPages,
+                hasNext: currentPage < totalPages,
+                hasPrev: currentPage > 1,
+            },
         });
     }),
 
     createProduct: asyncHandler(async (req, res) => {
         const body = createProductSchema.parse(req.body);
-        const slug = slugify(body.name, { lower: true, strict: true });
-        
-        // check category
+
         const category = await prisma.category.findUnique({
-            where: { id: body.categoryId }
+            where: { id: Number(body.categoryId) }
         });
 
-        const existingProduct = await prisma.product.findFirst({
+        if (!category) throw new ApiError(404, "Category not found");
+
+        const slug = generateSlug(body.name);
+
+        const existing = await prisma.product.findFirst({
             where: { slug }
         });
 
-        if (existingProduct) {
-            throw new ApiError(400, "Product with this name already exists");
+        if (existing) {
+            throw new ApiError(400, "Product already exists");
         }
 
-        if (!category) {
-            throw new ApiError(404, "Category not found");
-        }
+        // AUTO SKU (fallback if not provided)
+        const sku =
+            body.sku && body.sku !== "null"
+                ? body.sku
+                : generateSKU(body.name, category.name);
 
-        const imageUrls =
-            req.files?.map((file) => ({
-                url: `http://localhost:8000/uploads/${file.filename}`
+        const images =
+            req.files?.map((f) => ({
+                url: `http://localhost:8000/uploads/${f.filename}`
             })) || [];
 
         const product = await prisma.product.create({
             data: {
                 name: body.name,
                 slug,
+                sku,
+
                 description: body.description,
-                price: body.price,
-                stock: body.stock,
-                isActive: body.isActive ?? true,
-                categoryId: body.categoryId,
+                price: Number(body.price),
+                stock: Number(body.stock),
+                lowStock: Number(body.lowStock ?? 5),
+
+                isActive: toBoolean.isActive ?? true,
+                isFeatured: toBoolean.isFeatured ?? false,
+
+                brand: body.brand || null,
+                tags: parseTags(body.tags),
+
+                discountType: body.discountType || null,
+                discountValue: body.discountValue ? Number(body.discountValue) : null,
+                discountStart: toDate(body.discountStart),
+                discountEnd: toDate(body.discountEnd),
+
+                categoryId: Number(body.categoryId),
 
                 images: {
-                    create: imageUrls
+                    create: images
                 }
             },
             include: {
@@ -107,34 +280,34 @@ export const productController = {
         const productId = Number(id);
 
         const body = updateProductSchema.parse(req.body);
+        const clean = Object.fromEntries(
+            Object.entries(body).map(([k, v]) => [k, normalizeValue(v)])
+        );
 
-        // find product
-        const existingProduct = await prisma.product.findUnique({
+        const product = await prisma.product.findUnique({
             where: { id: productId },
             include: { images: true }
         });
 
-        if (!existingProduct) {
+        if (!product) {
             deleteFiles(req.files);
             throw new ApiError(404, "Product not found");
         }
-       
-        // find category
-        if (body.categoryId) {
+
+        // CATEGORY CHECK
+        if (clean.categoryId) {
             const category = await prisma.category.findUnique({
-                where: { id: body.categoryId }
+                where: { id: Number(clean.categoryId) }
             });
 
-            if (!category) {
-                deleteFiles(req.files);
-                throw new ApiError(404, "Category not found");
-            }
+            if (!category) throw new ApiError(404, "Category not found");
         }
 
-        // if slug change
-        let slug;
-        if (body.name) {
-            slug = slugify(body.name, { lower: true, strict: true });
+        // SLUG + NAME
+        let slug = product.slug;
+
+        if (clean.name) {
+            slug = generateSlug(clean.name);
 
             const duplicate = await prisma.product.findFirst({
                 where: {
@@ -144,64 +317,75 @@ export const productController = {
             });
 
             if (duplicate) {
-                deleteFiles(req.files);
-                throw new ApiError(400, "Product with this name already exists");
+                throw new ApiError(400, "Duplicate product name");
             }
         }
 
-        // 🔥 DELETE OLD IMAGES
-        let deleteIds = body.deleteImages;
+        // SKU (allow update OR keep old OR regenerate)
+        let sku = product.sku;
+
+        if (clean.sku) {
+            sku = clean.sku;
+        } else if (!sku) {
+            const category = await prisma.category.findUnique({
+                where: { id: product.categoryId }
+            });
+
+            sku = generateSKU(clean.name || product.name, category?.name || "PROD");
+        }
+
+        // DELETE IMAGES
+        let deleteIds = clean.deleteImages;
 
         if (deleteIds) {
-            if (!Array.isArray(deleteIds)) {
-                deleteIds = [deleteIds];
-            }
+            deleteIds = Array.isArray(deleteIds) ? deleteIds : [deleteIds];
 
-            const imagesToDelete = existingProduct.images.filter(img =>
+            const toDelete = product.images.filter((img) =>
                 deleteIds.includes(img.id)
             );
 
-            // delete from disk
-            imagesToDelete.forEach(img => {
+            toDelete.forEach((img) => {
                 const filePath = path.join(
                     "uploads",
                     img.url.split("/uploads/")[1]
                 );
-
-                fs.unlink(filePath, err => {
-                    if (err) console.error(err);
-                });
+                fs.unlink(filePath, () => { });
             });
 
-            // delete from DB
             await prisma.productImage.deleteMany({
-                where: {
-                    id: { in: deleteIds }
-                }
+                where: { id: { in: deleteIds } }
             });
         }
 
-        // add new image
         const newImages =
-            req.files?.map(file => ({
-                url: `http://localhost:8000/uploads/${file.filename}`
+            req.files?.map((f) => ({
+                url: `http://localhost:8000/uploads/${f.filename}`
             })) || [];
 
-        // update product
-        const updatedProduct = await prisma.product.update({
+        const updated = await prisma.product.update({
             where: { id: productId },
             data: {
-                ...(body.name && { name: body.name }),
-                ...(slug && { slug }),
-                ...(body.description !== undefined && {
-                    description: body.description
-                }),
-                ...(body.price !== undefined && { price: body.price }),
-                ...(body.stock !== undefined && { stock: body.stock }),
-                ...(body.isActive !== undefined && {
-                    isActive: body.isActive
-                }),
-                ...(body.categoryId && { categoryId: body.categoryId }),
+                name: clean.name,
+                slug,
+                sku,
+
+                description: clean.description,
+                price: clean.price ? Number(clean.price) : undefined,
+                stock: clean.stock ? Number(clean.stock) : undefined,
+                lowStock: clean.lowStock ? Number(clean.lowStock) : undefined,
+
+                isActive: toBoolean.isActive,
+                isFeatured: toBoolean.isFeatured,
+
+                brand: clean.brand || null,
+                tags: parseTags(clean.tags),
+
+                discountType: clean.discountType || null,
+                discountValue: clean.discountValue ? Number(clean.discountValue) : null,
+                discountStart: toDate(clean.discountStart),
+                discountEnd: toDate(clean.discountEnd),
+
+                categoryId: clean.categoryId ? Number(clean.categoryId) : undefined,
 
                 images: {
                     create: newImages
@@ -216,20 +400,32 @@ export const productController = {
         res.json({
             success: true,
             message: "Product updated successfully",
-            data: updatedProduct
+            data: updated
         });
     }),
 
     deleteProduct: asyncHandler(async (req, res) => {
         const { id } = req.params;
 
-        await prisma.product.delete({
-            where: { id: Number(id) }
+        const productId = Number(id);
+
+        const product = await prisma.product.findUnique({
+            where: { id: productId }
+        });
+
+        if (!product) throw new ApiError(404, "Product not found");
+
+        await prisma.product.update({
+            where: { id: productId },
+            data: {
+                isDeleted: true,
+                isActive: false
+            }
         });
 
         res.json({
             success: true,
-            message: "Product deleted"
+            message: "Product deleted successfully"
         });
     }),
 
@@ -238,7 +434,7 @@ export const productController = {
         const userId = req.user?.id;
 
         const product = await prisma.product.findUnique({
-            where: { id: Number(id) },
+            where: { id: Number(id), isDeleted: false },
             include: {
                 category: true,
                 images: true,

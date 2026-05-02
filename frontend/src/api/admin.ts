@@ -1,6 +1,7 @@
 import api from "./client";
 
 export const adminAPI = {
+  dashboard: () => api.get("/admin/dashboard"),
   products: () => api.get("/admin/products"),
   product: (id: number) => api.get(`/admin/products/${id}`),
   createProduct: (data: FormData) => api.post("/admin/products", data),

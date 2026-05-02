@@ -5,7 +5,7 @@ export const errorHandler = (err, req, res, next) => {
   if (err instanceof ZodError) {
     const errors = {};
 
-    err.issues.forEach((e) => {  
+    err.issues.forEach((e) => {
       errors[e.path[0]] = e.message;
     });
 
@@ -25,6 +25,6 @@ export const errorHandler = (err, req, res, next) => {
 
   return res.status(500).json({
     success: false,
-    message: "Internal Server Error"
+    message: err.message || "Server Error",
   });
 };

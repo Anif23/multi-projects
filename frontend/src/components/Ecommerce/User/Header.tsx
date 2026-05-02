@@ -1,61 +1,122 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import {
+  Search,
+  Heart,
+  ShoppingCart,
+  User,
+  Menu,
+  X,
+  LogOut,
+  Package,
+  Home,
+} from "lucide-react";
 
 import { useAuthStore } from "../../../store/authStore";
 import { useGuestCartStore } from "../../../store/guestCartStore";
 import { useWishlistStore } from "../../../store/guestWishlistStore";
+import { useProfile } from "../../../hooks/user/useProfile";
 import { useCart } from "../../../hooks/user/useCart";
+import { useWishlist } from "../../../hooks/user/useWishlist";
 
-const UserHeader = ({ open, setOpen }: any) => {
+const UserHeader = () => {
+  const { search: urlSearch } =
+    useLocation();
 
   const navigate = useNavigate();
-  const { token, logout } = useAuthStore();
-  const { pathname } = useLocation();
 
-  const guestCart = useGuestCartStore();
-  const guestWishlist = useWishlistStore();
-  const { data: serverCart } = useCart();
+  const { token, logout } =
+    useAuthStore();
 
-  const [show, setShow] = useState(true);
-  const [lastScroll, setLastScroll] = useState(0);
+  const guestCart =
+    useGuestCartStore();
 
-  const [search, setSearch] = useState("");
+  const guestWishlist =
+    useWishlistStore();
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  const { data: profile } =
+    useProfile();
 
-    if (!search.trim()) return;
+  const [open, setOpen] =
+    useState(false);
 
-    navigate(`/user/ecommerce/products?search=${search}`);
-  };
+  const [profileOpen, setProfileOpen] =
+    useState(false);
 
+  const [show, setShow] =
+    useState(true);
 
-  // 🔢 COUNTS
-  const cartCount = token
-    ? serverCart?.items?.length || 0
-    : guestCart.items.length;
+  const [lastScroll, setLastScroll] =
+    useState(0);
 
-  const wishlistCount = token
-    ? 0 // later connect API
-    : guestWishlist.items.length;
+  const params =
+    new URLSearchParams(
+      urlSearch
+    );
+
+  const searchFromUrl =
+    params.get("search") || "";
+
+  const [search, setSearch] =
+    useState(searchFromUrl);
+
+  useEffect(() => {
+    setSearch(searchFromUrl);
+  }, [searchFromUrl]);
+
+  const { data: cart } =
+    useCart();
+
+  const { data: wishlist } =
+    useWishlist();
+
+  const cartCount =
+    token
+      ? cart?.items?.length || 0
+      : guestCart.items?.length || 0;
+
+  const wishlistCount =
+    token
+      ? wishlist?.items?.length || 0
+      : guestWishlist.items?.length || 0;
 
   const nav = [
-    { name: "Home", path: "/user/ecommerce", isGuest: true },
-    { name: "Products", path: "/user/ecommerce/products", isGuest: true },
-    { name: "Orders", path: "/user/ecommerce/orders", isGuest: false },
-    { name: "Profile", path: "/user/ecommerce/profile", isGuest: false },
+    {
+      name: "Home",
+      path: "/user/ecommerce",
+      icon: Home,
+    },
+    {
+      name: "Products",
+      path:
+        "/user/ecommerce/products",
+      icon: Package,
+    },
+    {
+      name: "Orders",
+      path:
+        "/user/ecommerce/orders",
+      icon: Package,
+      private: true,
+    },
   ];
 
-  const filteredNav = nav.filter((item) =>
-    item.isGuest ? true : !!token
+  const filteredNav = nav.filter(
+    (item) =>
+      item.private
+        ? token
+        : true
   );
 
-  // 🔥 SCROLL EFFECT
   useEffect(() => {
     const handleScroll = () => {
-      const current = window.scrollY;
+      const current =
+        window.scrollY;
 
-      if (current > lastScroll && current > 80) {
+      if (
+        current > lastScroll &&
+        current > 80
+      ) {
         setShow(false);
       } else {
         setShow(true);
@@ -64,159 +125,301 @@ const UserHeader = ({ open, setOpen }: any) => {
       setLastScroll(current);
     };
 
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
+    window.addEventListener(
+      "scroll",
+      handleScroll
+    );
+
+    return () =>
+      window.removeEventListener(
+        "scroll",
+        handleScroll
+      );
   }, [lastScroll]);
+
+  const handleSearch = (
+    e: React.FormEvent
+  ) => {
+    e.preventDefault();
+
+    const value =
+      search.trim();
+
+    // ✅ if empty remove search param
+    if (!value) {
+      navigate(
+        "/user/ecommerce/products"
+      );
+
+      setOpen(false);
+      return;
+    }
+
+    navigate(
+      `/user/ecommerce/products?search=${encodeURIComponent(
+        value
+      )}&page=1`
+    );
+
+    setOpen(false);
+  };
+
+  const handleInputChange = (
+    value: string
+  ) => {
+    setSearch(value);
+
+    // ✅ instantly clear URL if empty
+    if (!value.trim()) {
+      navigate(
+        "/user/ecommerce/products"
+      );
+    }
+  };
 
   return (
     <>
       {/* HEADER */}
       <header
-        className={`fixed top-0 left-0 w-full z-50 backdrop-blur bg-white/80 border-b transition-transform duration-300 ${show ? "translate-y-0" : "-translate-y-full"
+        className={`fixed top-0 left-0 w-full z-50 border-b border-white/20 bg-white/80 backdrop-blur-xl transition-transform duration-300 ${show
+          ? "translate-y-0"
+          : "-translate-y-full"
           }`}
       >
-        <div className="max-w-7xl mx-auto px-4 md:px-6 py-3 flex items-center justify-between">
-
+        <div className="max-w-7xl mx-auto px-4 lg:px-8 h-16 flex items-center justify-between gap-4">
           {/* LOGO */}
-          <Link to="/user/ecommerce" className="text-xl font-bold">
-            🛒 My Store
+          <Link
+            to="/user/ecommerce"
+            className="text-xl font-bold tracking-tight"
+          >
+            🛍️ Asnif Store
           </Link>
 
-          {/* SEARCH */}
-          <form onSubmit={handleSearch} className="w-1/3 hidden md:block">
+          {/* SEARCH DESKTOP */}
+          <form
+            onSubmit={
+              handleSearch
+            }
+            className="hidden md:flex flex-1 max-w-xl relative"
+          >
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) =>
+                handleInputChange(
+                  e.target.value
+                )
+              }
               placeholder="Search products..."
-              className="w-full px-4 py-2 rounded-full border"
+              className="w-full bg-gray-100 rounded-full pl-11 pr-4 py-2 text-sm outline-none focus:ring-2 focus:ring-black"
+            />
+
+            <Search
+              size={18}
+              className="absolute left-4 top-2.5 text-gray-500"
             />
           </form>
 
-          <div className="flex items-center gap-4">
+          {/* RIGHT */}
+          <div className="flex items-center gap-3">
+            {/* WISHLIST */}
+            <Link
+              to="/user/ecommerce/wishlist"
+              className="relative p-2 rounded-full hover:bg-gray-100"
+            >
+              <Heart size={20} />
 
-            <div className="relative cursor-pointer">
-              <Link to="/user/ecommerce/wishlist">❤️</Link>
-              {wishlistCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1 rounded-full">
-                  {wishlistCount}
-                </span>
-              )}
-            </div>
-
-            {/* CART */}
-            <Link to="/user/ecommerce/cart" className="relative">
-              <span>🛒</span>
-              {cartCount > 0 && (
-                <span className="absolute -top-2 -right-2 bg-black text-white text-xs px-1 rounded-full">
-                  {cartCount}
-                </span>
-              )}
+              {wishlistCount >
+                0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] text-[10px] px-1 bg-red-500 text-white rounded-full flex items-center justify-center">
+                    {
+                      wishlistCount
+                    }
+                  </span>
+                )}
             </Link>
 
-            {/* DESKTOP NAV */}
-            <nav className="hidden md:flex items-center gap-2 ml-4">
-              {filteredNav.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`px-3 py-1 rounded-lg text-sm ${pathname === item.path
-                      ? "bg-black text-white"
-                      : "hover:bg-gray-100 text-gray-700"
-                    }`}
-                >
-                  {item.name}
-                </Link>
-              ))}
-            </nav>
+            {/* CART */}
+            <Link
+              to="/user/ecommerce/cart"
+              className="relative p-2 rounded-full hover:bg-gray-100"
+            >
+              <ShoppingCart
+                size={20}
+              />
 
+              {cartCount >
+                0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] text-[10px] px-1 bg-black text-white rounded-full flex items-center justify-center">
+                    {
+                      cartCount
+                    }
+                  </span>
+                )}
+            </Link>
+
+            {/* PROFILE */}
             {token ? (
-              <button
-                onClick={logout}
-                className="hidden md:block text-sm text-red-500"
-              >
-                Logout
-              </button>
+              <div className="relative hidden md:block">
+                <button
+                  onClick={() =>
+                    setProfileOpen(
+                      !profileOpen
+                    )
+                  }
+                  className="w-10 h-10 rounded-full bg-black text-white font-semibold flex items-center justify-center"
+                >
+                  {profile?.username?.charAt(
+                    0
+                  ) ||
+                    "U"}
+                </button>
+
+                {profileOpen && (
+                  <div className="absolute right-0 top-12 w-56 bg-white rounded-2xl shadow-xl border p-2">
+                    <div className="px-3 py-2 border-b">
+                      <p className="font-semibold">
+                        {
+                          profile?.username
+                        }
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {
+                          profile?.email
+                        }
+                      </p>
+                    </div>
+
+                    <Link
+                      to="/user/ecommerce/profile"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-gray-100"
+                    >
+                      <User size={16} />
+                      Profile
+                    </Link>
+
+                    <button
+                      onClick={() => {
+                        logout();
+                        navigate(
+                          "/login"
+                        );
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-red-500 hover:bg-red-50"
+                    >
+                      <LogOut size={16} />
+                      Logout
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <Link
                 to="/login"
-                className="hidden md:block bg-black text-white px-4 py-1 rounded-lg text-sm"
+                className="hidden md:block bg-black text-white px-5 py-2 rounded-full text-sm"
               >
                 Login
               </Link>
             )}
 
-            {/* MOBILE MENU */}
+            {/* MOBILE */}
             <button
-              className="md:hidden text-xl"
-              onClick={() => setOpen(true)}
+              onClick={() =>
+                setOpen(true)
+              }
+              className="md:hidden p-2"
             >
-              ☰
+              <Menu size={24} />
             </button>
           </div>
         </div>
       </header>
 
-      {open && (
-        <div
-          className="fixed inset-0 bg-black/40 z-40"
-          onClick={() => setOpen(false)}
-        />
-      )}
-
       {/* MOBILE SIDEBAR */}
       <div
-        className={`fixed top-0 left-0 h-full w-72 bg-white z-50 shadow-lg transform transition-transform duration-300 ${open ? "translate-x-0" : "-translate-x-full"
+        className={`fixed top-0 right-0 h-full w-80 bg-white z-50 shadow-2xl transition-transform duration-300 ${open
+          ? "translate-x-0"
+          : "translate-x-full"
           }`}
       >
-        <div className="p-4 flex justify-between border-b">
-          <h2 className="font-semibold">Menu</h2>
-          <button onClick={() => setOpen(false)}>✕</button>
+        <div className="h-16 px-4 border-b flex items-center justify-between">
+          <h2 className="font-semibold">
+            Menu
+          </h2>
+
+          <button
+            onClick={() =>
+              setOpen(false)
+            }
+          >
+            <X />
+          </button>
         </div>
 
-        <div className="p-4">
-          {/* SEARCH MOBILE */}
-          <input
-            placeholder="Search..."
-            className="w-full px-3 py-2 border rounded mb-4"
-          />
+        <div className="p-4 space-y-4">
+          {/* MOBILE SEARCH */}
+          <form
+            onSubmit={
+              handleSearch
+            }
+            className="relative"
+          >
+            <input
+              value={search}
+              onChange={(e) =>
+                handleInputChange(
+                  e.target.value
+                )
+              }
+              placeholder="Search..."
+              className="w-full bg-gray-100 rounded-full pl-10 pr-4 py-2"
+            />
 
-          <nav className="flex flex-col gap-2">
-            {filteredNav.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={() => setOpen(false)}
-                className={`px-3 py-2 rounded ${pathname === item.path
-                    ? "bg-black text-white"
-                    : "hover:bg-gray-100"
-                  }`}
-              >
-                {item.name}
-              </Link>
-            ))}
-          </nav>
+            <Search
+              size={18}
+              className="absolute left-3 top-2.5 text-gray-500"
+            />
+          </form>
 
-          {/* AUTH */}
-          <div className="mt-6">
-            {token ? (
-              <button
-                onClick={logout}
-                className="w-full bg-red-500 text-white py-2 rounded"
-              >
-                Logout
-              </button>
-            ) : (
-              <Link
-                to="/login"
-                onClick={() => setOpen(false)}
-                className="block text-center bg-black text-white py-2 rounded"
-              >
-                Login
-              </Link>
+          {/* NAV */}
+          <div className="space-y-2">
+            {filteredNav.map(
+              (item) => {
+                const Icon =
+                  item.icon;
+
+                return (
+                  <Link
+                    key={
+                      item.path
+                    }
+                    to={
+                      item.path
+                    }
+                    onClick={() =>
+                      setOpen(
+                        false
+                      )
+                    }
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100"
+                  >
+                    <Icon
+                      size={
+                        18
+                      }
+                    />
+                    {
+                      item.name
+                    }
+                  </Link>
+                );
+              }
             )}
           </div>
         </div>
       </div>
+
+      {/* SPACER */}
+      <div className="h-16" />
     </>
   );
 };

@@ -7,6 +7,7 @@ import { authMiddleware } from "../../middleware/auth.js";
 import { mergeCart, mergeWishlist } from "../../controller/ecommerce/mergeApi.js";
 import { getWishlist, updateWishlist } from "../../controller/ecommerce/wishlist.js";
 import { optionalAuth } from "../../middleware/optionalAuth.js";
+import { profileController } from "../../controller/ecommerce/profile.js";
 
 export const productRoutes = (app) => {
   app.get("/products", optionalAuth, productController.getProducts);
@@ -43,4 +44,10 @@ export const mergeApiRoutes = (app) => {
 export const wishlistRoutes = (app) => {
   app.get("/wishlist", authMiddleware, getWishlist);
   app.post("/wishlist/:productId", authMiddleware, updateWishlist);
+}
+
+export const profileRoutes = (app) => {
+  app.get("/profile", authMiddleware, profileController.getProfile);
+  app.put("/profile/update", authMiddleware, profileController.updateProfile);
+  app.put("/profile/password", authMiddleware, profileController.changePassword);
 }

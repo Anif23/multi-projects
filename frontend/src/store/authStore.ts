@@ -21,8 +21,6 @@ export const useAuthStore = create<AuthState>()(
       setAuth: (token) => {
         const payload = JSON.parse(atob(token.split(".")[1]));
 
-        queryClient.clear();
-
         set({
           token,
           user: payload,
@@ -32,12 +30,16 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         queryClient.clear();
-        
-        set({ token: null, user: null, role: null });
+
+        set({
+          token: null,
+          user: null,
+          role: null,
+        });
       },
     }),
     {
-      name: "auth-storage", // 🔥 auto localStorage
-    }
-  )
+      name: "auth-storage",
+    },
+  ),
 );

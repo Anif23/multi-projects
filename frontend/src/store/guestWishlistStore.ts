@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Product } from "../types";
-import { queryClient } from "../lib/queryClient";
 
 interface WishlistState {
   items: Product[];

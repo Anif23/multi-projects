@@ -4,8 +4,16 @@ import { upload } from "../../middleware/upload.js";
 import { productController } from "../../controller/ecommerce/product.js";
 import { categoryController } from "../../controller/ecommerce/category.js";
 import { orderController } from "../../controller/ecommerce/order.js";
+import { adminController } from "../../controller/ecommerce/admin.js";
 
 export const adminRoutes = (app) => {
+
+    app.get(
+        "/admin/dashboard",
+        authMiddleware,
+        adminMiddleware,
+        adminController.dashboard
+    );
 
     app.get(
         "/admin/products",
@@ -93,27 +101,5 @@ export const adminRoutes = (app) => {
         authMiddleware,
         adminMiddleware,
         orderController.updatePaymentStatus
-    );
-
-    app.get(
-        "/admin/dashboard",
-        authMiddleware,
-        adminMiddleware,
-        async (req, res) => {
-            const totalOrders = await prisma.order.count();
-            const totalUsers = await prisma.user.count();
-            const lowStock = await prisma.product.findMany({
-                where: { stock: { lte: 5 } }
-            });
-
-            res.json({
-                success: true,
-                data: {
-                    totalOrders,
-                    totalUsers,
-                    lowStock
-                }
-            });
-        }
     );
 };

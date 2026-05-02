@@ -3,12 +3,20 @@ import { userAPI } from "../../api/user";
 import { qk } from "../../utils/queryKeys";
 import toast from "react-hot-toast";
 import { getErrorMessage } from "../../utils/getErrorMessage";
+import { useAuthStore } from "../../store/authStore";
 
-export const useCart = () =>
-  useQuery({
+export const useCart = () => {
+  const token = useAuthStore((s) => s.token);
+
+  return useQuery({
     queryKey: qk.cart,
-    queryFn: () => userAPI.cart().then(r => r.data.data),
+    queryFn: async () => {
+      const res = await userAPI.cart();
+      return res.data.data;
+    },
+    enabled: !!token,
   });
+};
 
 export const useAddToCart = () => {
   const qc = useQueryClient();
@@ -17,7 +25,6 @@ export const useAddToCart = () => {
     mutationFn: (data: any) => userAPI.addToCart(data),
 
     onSuccess: () => {
-      toast.success("Added to cart 🛒");
       qc.invalidateQueries({ queryKey: qk.cart });
     },
 
@@ -31,8 +38,7 @@ export const useUpdateCart = () => {
   const qc = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: any) =>
-      userAPI.updateCart(id, data),
+    mutationFn: ({ id, data }: any) => userAPI.updateCart(id, data),
 
     onSuccess: () => {
       toast.success("Cart updated");

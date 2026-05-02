@@ -22,4 +22,8 @@ export const userAPI = {
 
   mergeCart: (items: any) => api.post("/merge/cart", { items }),
   mergeWishlist: (items: any) => api.post("/merge/wishlist", { items }),
+
+  profile: () => api.get("/profile"),
+  updateProfile: (data: any) => api.put("/profile/update", data),
+  changePassword: (data: any) => api.put("/profile/password", data),
 };
